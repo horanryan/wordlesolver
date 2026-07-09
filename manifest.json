@@ -1,0 +1,10 @@
+{
+  "name": "Wordle Solver",
+  "short_name": "Wordle Solver",
+  "description": "A simple offline Wordle solver.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#171717",
+  "theme_color": "#171717"
+}
