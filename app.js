@@ -2,6 +2,7 @@ const form = document.querySelector("#guess-form");
 const guessInput = document.querySelector("#guess");
 const guessBoxes = document.querySelector(".guess-boxes");
 const guessTiles = Array.from(document.querySelectorAll(".guess-tile"));
+const undoButton = document.querySelector("#undo-button");
 const statusOutput = document.querySelector("#status");
 const bestGuessOutput = document.querySelector("#best-guess");
 const candidateCountOutput = document.querySelector("#candidate-count");
@@ -151,36 +152,46 @@ function clueMatches(answer, clue) {
   });
 }
 
-function buildFrequencyScore(candidates) {
-  const positionCounts = Array.from({ length: 5 }, () => ({}));
-  const letterCounts = {};
+function scoreGuessByPartitions(guess, candidates) {
+  const buckets = new Map();
 
-  candidates.forEach((candidate) => {
-    const uniqueLetters = new Set(candidate);
-
-    for (let index = 0; index < 5; index += 1) {
-      const letter = candidate[index];
-      positionCounts[index][letter] = (positionCounts[index][letter] || 0) + 1;
-    }
-
-    uniqueLetters.forEach((letter) => {
-      letterCounts[letter] = (letterCounts[letter] || 0) + 1;
-    });
+  candidates.forEach((answer) => {
+    const pattern = getWordleFeedback(answer, guess).join("");
+    buckets.set(pattern, (buckets.get(pattern) || 0) + 1);
   });
 
-  return { positionCounts, letterCounts };
+  let expectedRemainingScore = 0;
+  let worstBucketSize = 0;
+
+  buckets.forEach((bucketSize) => {
+    expectedRemainingScore += bucketSize * bucketSize;
+    worstBucketSize = Math.max(worstBucketSize, bucketSize);
+  });
+
+  return {
+    expectedRemainingScore,
+    worstBucketSize
+  };
 }
 
-function scoreGuess(word, frequencyScore) {
-  const { positionCounts, letterCounts } = frequencyScore;
-  const seen = new Set();
+function isBetterGuess(candidate, best) {
+  if (!best) {
+    return true;
+  }
 
-  return word.split("").reduce((score, letter, index) => {
-    const positionScore = positionCounts[index][letter] || 0;
-    const letterScore = seen.has(letter) ? 0 : letterCounts[letter] || 0;
-    seen.add(letter);
-    return score + positionScore + letterScore;
-  }, 0);
+  if (candidate.expectedRemainingScore !== best.expectedRemainingScore) {
+    return candidate.expectedRemainingScore < best.expectedRemainingScore;
+  }
+
+  if (candidate.worstBucketSize !== best.worstBucketSize) {
+    return candidate.worstBucketSize < best.worstBucketSize;
+  }
+
+  if (candidate.isPossibleAnswer !== best.isPossibleAnswer) {
+    return candidate.isPossibleAnswer;
+  }
+
+  return candidate.word < best.word;
 }
 
 function getBestGuess(candidates) {
@@ -188,16 +199,23 @@ function getBestGuess(candidates) {
     return "";
   }
 
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+
   const candidateSet = new Set(candidates);
-  const frequencyScore = buildFrequencyScore(candidates);
+  const guessesToScore = candidates.length <= 2 ? candidates : guessWords;
 
-  return guessWords.reduce((best, word) => {
-    const score = scoreGuess(word, frequencyScore);
-    const candidateBonus = candidateSet.has(word) ? candidates.length : 0;
-    const totalScore = score + candidateBonus;
+  return guessesToScore.reduce((best, word) => {
+    const score = scoreGuessByPartitions(word, candidates);
+    const candidate = {
+      word,
+      isPossibleAnswer: candidateSet.has(word),
+      ...score
+    };
 
-    if (!best || totalScore > best.score) {
-      return { word, score: totalScore };
+    if (isBetterGuess(candidate, best)) {
+      return candidate;
     }
 
     return best;
@@ -206,6 +224,7 @@ function getBestGuess(candidates) {
 
 function renderHistory() {
   historyOutput.innerHTML = "";
+  undoButton.disabled = submittedClues.length === 0;
 
   submittedClues.forEach((clue) => {
     const row = document.createElement("div");
@@ -279,6 +298,18 @@ document.addEventListener("keydown", (event) => {
 
 guessInput.addEventListener("input", () => {
   updateGuess(guessInput.value);
+});
+
+undoButton.addEventListener("click", () => {
+  if (!submittedClues.length) {
+    return;
+  }
+
+  const removedClue = submittedClues.pop();
+  renderHistory();
+  updateSuggestion();
+  renderStatus(`${removedClue.guess.toUpperCase()} removed.`);
+  guessInput.focus();
 });
 
 form.addEventListener("submit", (event) => {

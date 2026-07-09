@@ -24,6 +24,8 @@
         --tile-correct: #10a37f;
         --button: #202123;
         --button-text: #ffffff;
+        --secondary-button: #ecece5;
+        --secondary-button-text: #202123;
         background: var(--page);
         color: var(--text);
       }
@@ -153,6 +155,16 @@
         cursor: pointer;
       }
 
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+
+      .secondary-button {
+        background: var(--secondary-button);
+        color: var(--secondary-button-text);
+      }
+
       button:focus-visible,
       .guess-boxes:focus-visible {
         outline: 3px solid #10a37f;
@@ -241,6 +253,8 @@
           --tile-correct: #10a37f;
           --button: #ececec;
           --button-text: #171717;
+          --secondary-button: #2f2f2f;
+          --secondary-button-text: #ececec;
         }
       }
 
@@ -282,6 +296,7 @@
           </button>
           <input id="guess" name="guess" maxlength="5" pattern="[A-Za-z]{5}" inputmode="text" autocomplete="off" aria-hidden="true" tabindex="-1">
           <div class="actions">
+            <button class="secondary-button" id="undo-button" type="button" disabled>Undo</button>
             <button type="submit">Enter</button>
           </div>
         </form>
