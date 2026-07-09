@@ -1,4 +1,4 @@
-const CACHE_NAME = "wordle-solver-v12";
+const CACHE_NAME = "wordle-solver-v18";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -12,6 +12,7 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
   );
+  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -22,7 +23,7 @@ self.addEventListener("activate", (event) => {
           .filter((cacheName) => cacheName !== CACHE_NAME)
           .map((cacheName) => caches.delete(cacheName))
       )
-    )
+    ).then(() => self.clients.claim())
   );
 });
 

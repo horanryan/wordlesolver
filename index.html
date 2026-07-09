@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#f7f7f4" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#171717" media="(prefers-color-scheme: dark)">
     <meta name="description" content="A simple offline Wordle solver.">
@@ -37,9 +37,7 @@
       body {
         margin: 0;
         min-height: 100vh;
-        display: grid;
-        place-items: center;
-        padding: 24px 16px;
+        padding: 24px 16px calc(216px + env(safe-area-inset-bottom));
       }
 
       main {
@@ -77,14 +75,6 @@
         letter-spacing: 0;
       }
 
-      .board {
-        display: grid;
-        grid-template-columns: repeat(5, 56px);
-        gap: 5px;
-        justify-content: center;
-        margin: 0 auto 28px;
-      }
-
       .tile {
         width: 56px;
         height: 56px;
@@ -116,14 +106,6 @@
 
       .tile.correct {
         background: var(--tile-correct);
-      }
-
-      label {
-        display: block;
-        margin-bottom: 8px;
-        color: var(--muted);
-        font-size: 14px;
-        font-weight: 500;
       }
 
       input {
@@ -188,6 +170,71 @@
         border-color: var(--tile-filled);
       }
 
+      .keyboard {
+        display: grid;
+        gap: 8px;
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 10;
+        width: 100%;
+        max-width: 520px;
+        margin: 0 auto;
+        padding: 10px 8px max(10px, env(safe-area-inset-bottom));
+        background: var(--page);
+        touch-action: manipulation;
+        user-select: none;
+      }
+
+      .keyboard-row {
+        display: grid;
+        grid-template-columns: repeat(10, minmax(0, 1fr));
+        gap: 5px;
+      }
+
+      .keyboard-row:nth-child(2) {
+        padding: 0 5%;
+      }
+
+      .keyboard-row:nth-child(3) {
+        grid-template-columns: 1.45fr repeat(7, minmax(0, 1fr)) 1.45fr;
+      }
+
+      .keyboard-key {
+        min-width: 0;
+        min-height: 58px;
+        border-radius: 6px;
+        padding: 0 4px;
+        background: var(--secondary-button);
+        color: var(--secondary-button-text);
+        font-size: 16px;
+        line-height: 1;
+      }
+
+      .keyboard-key[data-key="enter"],
+      .keyboard-key[data-key="backspace"] {
+        font-size: 12px;
+      }
+
+      .keyboard-key.absent,
+      .keyboard-key.present,
+      .keyboard-key.correct {
+        color: #ffffff;
+      }
+
+      .keyboard-key.absent {
+        background: var(--tile-absent);
+      }
+
+      .keyboard-key.present {
+        background: var(--tile-present);
+      }
+
+      .keyboard-key.correct {
+        background: var(--tile-correct);
+      }
+
       .status {
         margin-top: 16px;
         color: var(--muted);
@@ -237,6 +284,12 @@
         width: 56px;
         height: 56px;
         font-size: 28px;
+        cursor: pointer;
+      }
+
+      .history-row .tile:focus-visible {
+        outline: 3px solid #10a37f;
+        outline-offset: 2px;
       }
 
       @media (prefers-color-scheme: dark) {
@@ -259,10 +312,6 @@
       }
 
       @media (max-width: 380px) {
-        .board {
-          grid-template-columns: repeat(5, 48px);
-        }
-
         .tile,
         .guess-boxes,
         .history-row {
@@ -297,7 +346,6 @@
           <input id="guess" name="guess" maxlength="5" pattern="[A-Za-z]{5}" inputmode="text" autocomplete="off" aria-hidden="true" tabindex="-1">
           <div class="actions">
             <button class="secondary-button" id="undo-button" type="button" disabled>Undo</button>
-            <button type="submit">Enter</button>
           </div>
         </form>
         <div class="status" id="status" role="status">Ready to work offline after the first load.</div>
@@ -308,6 +356,42 @@
         </div>
       </section>
     </main>
+    <div class="keyboard" aria-label="Word keyboard">
+      <div class="keyboard-row">
+        <button class="keyboard-key" type="button" data-key="q">Q</button>
+        <button class="keyboard-key" type="button" data-key="w">W</button>
+        <button class="keyboard-key" type="button" data-key="e">E</button>
+        <button class="keyboard-key" type="button" data-key="r">R</button>
+        <button class="keyboard-key" type="button" data-key="t">T</button>
+        <button class="keyboard-key" type="button" data-key="y">Y</button>
+        <button class="keyboard-key" type="button" data-key="u">U</button>
+        <button class="keyboard-key" type="button" data-key="i">I</button>
+        <button class="keyboard-key" type="button" data-key="o">O</button>
+        <button class="keyboard-key" type="button" data-key="p">P</button>
+      </div>
+      <div class="keyboard-row">
+        <button class="keyboard-key" type="button" data-key="a">A</button>
+        <button class="keyboard-key" type="button" data-key="s">S</button>
+        <button class="keyboard-key" type="button" data-key="d">D</button>
+        <button class="keyboard-key" type="button" data-key="f">F</button>
+        <button class="keyboard-key" type="button" data-key="g">G</button>
+        <button class="keyboard-key" type="button" data-key="h">H</button>
+        <button class="keyboard-key" type="button" data-key="j">J</button>
+        <button class="keyboard-key" type="button" data-key="k">K</button>
+        <button class="keyboard-key" type="button" data-key="l">L</button>
+      </div>
+      <div class="keyboard-row">
+        <button class="keyboard-key" type="button" data-key="backspace" aria-label="Backspace">DEL</button>
+        <button class="keyboard-key" type="button" data-key="z">Z</button>
+        <button class="keyboard-key" type="button" data-key="x">X</button>
+        <button class="keyboard-key" type="button" data-key="c">C</button>
+        <button class="keyboard-key" type="button" data-key="v">V</button>
+        <button class="keyboard-key" type="button" data-key="b">B</button>
+        <button class="keyboard-key" type="button" data-key="n">N</button>
+        <button class="keyboard-key" type="button" data-key="m">M</button>
+        <button class="keyboard-key" type="button" data-key="enter">ENTER</button>
+      </div>
+    </div>
 
     <script src="app.js" defer></script>
   </body>

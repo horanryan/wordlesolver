@@ -7,7 +7,21 @@ const statusOutput = document.querySelector("#status");
 const bestGuessOutput = document.querySelector("#best-guess");
 const candidateCountOutput = document.querySelector("#candidate-count");
 const historyOutput = document.querySelector("#history");
+const keyboardKeys = Array.from(document.querySelectorAll(".keyboard-key"));
 const feedbackOrder = ["absent", "present", "correct"];
+const feedbackValues = {
+  absent: 0,
+  present: 1,
+  correct: 2
+};
+const feedbackRank = {
+  absent: 1,
+  present: 2,
+  correct: 3
+};
+const EXACT_SCORING_LIMIT = 350;
+const PARTITION_COUNT = 243;
+const MAX_SUGGESTION_CACHE_SIZE = 60;
 const appState = {
   answerCount: 0,
   guessCount: 0,
@@ -17,10 +31,20 @@ const appState = {
 };
 let answerWords = [];
 let guessWords = [];
+let guessMetas = [];
 let guessWordSet = new Set();
 let possibleAnswers = [];
 let feedbackStates = Array(5).fill("absent");
 const submittedClues = [];
+const suggestionCache = new Map();
+
+function cacheSuggestion(signature, suggestion) {
+  if (suggestionCache.size >= MAX_SUGGESTION_CACHE_SIZE) {
+    suggestionCache.delete(suggestionCache.keys().next().value);
+  }
+
+  suggestionCache.set(signature, suggestion);
+}
 
 function renderStatus(message) {
   if (message) {
@@ -58,6 +82,28 @@ async function loadWordList(path) {
   return parseWordList(await response.text());
 }
 
+function getUniqueLetters(word) {
+  const letters = [];
+
+  for (let index = 0; index < word.length; index += 1) {
+    const letter = word[index];
+
+    if (!letters.includes(letter)) {
+      letters.push(letter);
+    }
+  }
+
+  return letters;
+}
+
+function createWordMeta(word) {
+  return {
+    word,
+    letters: word.split(""),
+    uniqueLetters: getUniqueLetters(word)
+  };
+}
+
 async function loadDictionaries() {
   try {
     const [loadedAnswers, loadedGuesses] = await Promise.all([
@@ -67,6 +113,7 @@ async function loadDictionaries() {
 
     answerWords = loadedAnswers;
     guessWords = loadedGuesses;
+    guessMetas = guessWords.map(createWordMeta);
     guessWordSet = new Set(guessWords);
     possibleAnswers = answerWords;
     appState.answerCount = answerWords.length;
@@ -118,13 +165,26 @@ function cycleFeedback(index) {
   syncGuessTiles();
 }
 
-function getWordleFeedback(answer, guess) {
-  const result = Array(5).fill("absent");
+function encodeFeedback(feedback) {
+  return feedback.reduce((code, state) => {
+    return code * 3 + feedbackValues[state];
+  }, 0);
+}
+
+function getClueSignature() {
+  return submittedClues
+    .map((clue) => `${clue.guess}:${encodeFeedback(clue.feedback)}`)
+    .join("|");
+}
+
+function getWordleFeedbackCode(answer, guess) {
+  let code = 0;
+  const result = [0, 0, 0, 0, 0];
   const remaining = {};
 
   for (let index = 0; index < 5; index += 1) {
     if (answer[index] === guess[index]) {
-      result[index] = "correct";
+      result[index] = feedbackValues.correct;
     } else {
       remaining[answer[index]] = (remaining[answer[index]] || 0) + 1;
     }
@@ -133,37 +193,38 @@ function getWordleFeedback(answer, guess) {
   for (let index = 0; index < 5; index += 1) {
     const letter = guess[index];
 
-    if (result[index] === "correct") {
+    if (result[index] === feedbackValues.correct) {
       continue;
     }
 
     if (remaining[letter]) {
-      result[index] = "present";
+      result[index] = feedbackValues.present;
       remaining[letter] -= 1;
     }
   }
 
-  return result;
-}
+  for (let index = 0; index < 5; index += 1) {
+    code = code * 3 + result[index];
+  }
 
-function clueMatches(answer, clue) {
-  return getWordleFeedback(answer, clue.guess).every((state, index) => {
-    return state === clue.feedback[index];
-  });
+  return code;
 }
 
 function scoreGuessByPartitions(guess, candidates) {
-  const buckets = new Map();
+  const buckets = new Uint16Array(PARTITION_COUNT);
 
   candidates.forEach((answer) => {
-    const pattern = getWordleFeedback(answer, guess).join("");
-    buckets.set(pattern, (buckets.get(pattern) || 0) + 1);
+    buckets[getWordleFeedbackCode(answer, guess)] += 1;
   });
 
   let expectedRemainingScore = 0;
   let worstBucketSize = 0;
 
   buckets.forEach((bucketSize) => {
+    if (!bucketSize) {
+      return;
+    }
+
     expectedRemainingScore += bucketSize * bucketSize;
     worstBucketSize = Math.max(worstBucketSize, bucketSize);
   });
@@ -172,6 +233,44 @@ function scoreGuessByPartitions(guess, candidates) {
     expectedRemainingScore,
     worstBucketSize
   };
+}
+
+function getFastGuess(candidates) {
+  const positionCounts = Array.from({ length: 5 }, () => ({}));
+  const letterCounts = {};
+  const candidateSet = new Set(candidates);
+
+  candidates.forEach((answer) => {
+    getUniqueLetters(answer).forEach((letter) => {
+      letterCounts[letter] = (letterCounts[letter] || 0) + 1;
+    });
+
+    for (let index = 0; index < 5; index += 1) {
+      const letter = answer[index];
+      positionCounts[index][letter] = (positionCounts[index][letter] || 0) + 1;
+    }
+  });
+
+  return guessMetas.reduce((best, guess) => {
+    let score = candidateSet.has(guess.word) ? 0.5 : 0;
+
+    guess.letters.forEach((letter, index) => {
+      score += (positionCounts[index][letter] || 0) * 1.4;
+    });
+
+    guess.uniqueLetters.forEach((letter) => {
+      score += letterCounts[letter] || 0;
+    });
+
+    if (!best || score > best.score || (score === best.score && guess.word < best.word)) {
+      return {
+        word: guess.word,
+        score
+      };
+    }
+
+    return best;
+  }, null).word;
 }
 
 function isBetterGuess(candidate, best) {
@@ -203,9 +302,12 @@ function getBestGuess(candidates) {
     return candidates[0];
   }
 
+  if (candidates.length > EXACT_SCORING_LIMIT) {
+    return getFastGuess(candidates);
+  }
+
   const candidateSet = new Set(candidates);
   const guessesToScore = candidates.length <= 2 ? candidates : guessWords;
-
   return guessesToScore.reduce((best, word) => {
     const score = scoreGuessByPartitions(word, candidates);
     const candidate = {
@@ -226,7 +328,7 @@ function renderHistory() {
   historyOutput.innerHTML = "";
   undoButton.disabled = submittedClues.length === 0;
 
-  submittedClues.forEach((clue) => {
+  submittedClues.forEach((clue, clueIndex) => {
     const row = document.createElement("div");
     row.className = "history-row";
 
@@ -234,10 +336,49 @@ function renderHistory() {
       const tile = document.createElement("span");
       tile.className = `tile ${clue.feedback[index]}`;
       tile.textContent = letter;
+      tile.tabIndex = 0;
+      tile.dataset.clueIndex = clueIndex;
+      tile.dataset.tileIndex = index;
+      tile.setAttribute("role", "button");
+      tile.setAttribute("aria-label", `${letter.toUpperCase()} is ${clue.feedback[index]}. Tap to change.`);
       row.append(tile);
     });
 
     historyOutput.append(row);
+  });
+
+  renderKeyboardFeedback();
+}
+
+function cycleSubmittedFeedback(clueIndex, tileIndex) {
+  const clue = submittedClues[clueIndex];
+  const currentIndex = feedbackOrder.indexOf(clue.feedback[tileIndex]);
+  clue.feedback[tileIndex] = feedbackOrder[(currentIndex + 1) % feedbackOrder.length];
+  updateSuggestion();
+  renderHistory();
+  renderStatus(`${clue.guess.toUpperCase()} clue updated.`);
+}
+
+function renderKeyboardFeedback() {
+  const letterFeedback = {};
+
+  submittedClues.forEach((clue) => {
+    clue.guess.split("").forEach((letter, index) => {
+      const state = clue.feedback[index];
+
+      if (!letterFeedback[letter] || feedbackRank[state] > feedbackRank[letterFeedback[letter]]) {
+        letterFeedback[letter] = state;
+      }
+    });
+  });
+
+  keyboardKeys.forEach((key) => {
+    const letter = key.dataset.key;
+    key.classList.remove("absent", "present", "correct");
+
+    if (letterFeedback[letter]) {
+      key.classList.add(letterFeedback[letter]);
+    }
   });
 }
 
@@ -246,13 +387,36 @@ function updateSuggestion() {
     return;
   }
 
-  possibleAnswers = answerWords.filter((answer) => {
-    return submittedClues.every((clue) => clueMatches(answer, clue));
-  });
+  const signature = getClueSignature();
+  const cachedSuggestion = suggestionCache.get(signature);
+
+  if (cachedSuggestion) {
+    possibleAnswers = cachedSuggestion.possibleAnswers;
+    bestGuessOutput.textContent = cachedSuggestion.bestGuess || "-----";
+    candidateCountOutput.textContent = cachedSuggestion.message;
+    return;
+  }
+
+  const clueCodes = submittedClues.map((clue) => ({
+    guess: clue.guess,
+    feedbackCode: encodeFeedback(clue.feedback)
+  }));
+
+  possibleAnswers = clueCodes.length
+    ? answerWords.filter((answer) => {
+        return clueCodes.every((clue) => getWordleFeedbackCode(answer, clue.guess) === clue.feedbackCode);
+      })
+    : answerWords;
 
   const bestGuess = getBestGuess(possibleAnswers);
+  const message = `${possibleAnswers.length.toLocaleString()} possible answer${possibleAnswers.length === 1 ? "" : "s"} remaining.`;
   bestGuessOutput.textContent = bestGuess || "-----";
-  candidateCountOutput.textContent = `${possibleAnswers.length.toLocaleString()} possible answer${possibleAnswers.length === 1 ? "" : "s"} remaining.`;
+  candidateCountOutput.textContent = message;
+  cacheSuggestion(signature, {
+    bestGuess,
+    possibleAnswers,
+    message
+  });
 }
 
 function resetCurrentGuess() {
@@ -262,14 +426,57 @@ function resetCurrentGuess() {
 }
 
 guessBoxes.addEventListener("click", () => {
-  guessInput.focus();
+  guessBoxes.focus();
 });
 
 guessTiles.forEach((tile, index) => {
   tile.addEventListener("click", (event) => {
     event.stopPropagation();
     cycleFeedback(index);
-    guessInput.focus();
+    guessBoxes.focus();
+  });
+});
+
+historyOutput.addEventListener("click", (event) => {
+  const tile = event.target.closest(".history-row .tile");
+
+  if (!tile) {
+    return;
+  }
+
+  cycleSubmittedFeedback(Number(tile.dataset.clueIndex), Number(tile.dataset.tileIndex));
+});
+
+historyOutput.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+
+  const tile = event.target.closest(".history-row .tile");
+
+  if (!tile) {
+    return;
+  }
+
+  event.preventDefault();
+  cycleSubmittedFeedback(Number(tile.dataset.clueIndex), Number(tile.dataset.tileIndex));
+});
+
+keyboardKeys.forEach((key) => {
+  key.addEventListener("click", () => {
+    const keyValue = key.dataset.key;
+
+    if (keyValue === "backspace") {
+      updateGuess(guessInput.value.slice(0, -1));
+      return;
+    }
+
+    if (keyValue === "enter") {
+      form.requestSubmit();
+      return;
+    }
+
+    updateGuess(guessInput.value + keyValue);
   });
 });
 
@@ -309,7 +516,7 @@ undoButton.addEventListener("click", () => {
   renderHistory();
   updateSuggestion();
   renderStatus(`${removedClue.guess.toUpperCase()} removed.`);
-  guessInput.focus();
+  guessBoxes.focus();
 });
 
 form.addEventListener("submit", (event) => {
