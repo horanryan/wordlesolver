@@ -1,10 +1,11 @@
-const CACHE_NAME = "wordle-solver-v8";
+const CACHE_NAME = "wordle-solver-v10";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./app.js",
   "./manifest.json",
-  "./answers.txt"
+  "./answers.txt",
+  "./valid-guesses.txt"
 ];
 
 self.addEventListener("install", (event) => {

@@ -9,11 +9,14 @@ const historyOutput = document.querySelector("#history");
 const feedbackOrder = ["absent", "present", "correct"];
 const appState = {
   answerCount: 0,
+  guessCount: 0,
   answersLoaded: false,
+  guessesLoaded: false,
   offlineReady: false
 };
 let answerWords = [];
 let guessWords = [];
+let guessWordSet = new Set();
 let possibleAnswers = [];
 let feedbackStates = Array(5).fill("absent");
 const submittedClues = [];
@@ -24,40 +27,55 @@ function renderStatus(message) {
     return;
   }
 
-  if (appState.answersLoaded && appState.offlineReady) {
-    statusOutput.textContent = `Loaded ${appState.answerCount.toLocaleString()} possible answers. Offline support is installed.`;
+  if (appState.answersLoaded && appState.guessesLoaded && appState.offlineReady) {
+    statusOutput.textContent = `Loaded ${appState.answerCount.toLocaleString()} answers and ${appState.guessCount.toLocaleString()} valid guesses. Offline support is installed.`;
     return;
   }
 
-  if (appState.answersLoaded) {
-    statusOutput.textContent = `Loaded ${appState.answerCount.toLocaleString()} possible answers.`;
+  if (appState.answersLoaded && appState.guessesLoaded) {
+    statusOutput.textContent = `Loaded ${appState.answerCount.toLocaleString()} answers and ${appState.guessCount.toLocaleString()} valid guesses.`;
     return;
   }
 
-  statusOutput.textContent = "Loading answer dictionary.";
+  statusOutput.textContent = "Loading dictionaries.";
 }
 
-async function loadAnswerWords() {
+function parseWordList(text) {
+  return text
+    .split(/\s+/)
+    .map((word) => word.trim().toLowerCase())
+    .filter((word) => /^[a-z]{5}$/.test(word));
+}
+
+async function loadWordList(path) {
+  const response = await fetch(path);
+
+  if (!response.ok) {
+    throw new Error(`Could not load ${path}`);
+  }
+
+  return parseWordList(await response.text());
+}
+
+async function loadDictionaries() {
   try {
-    const response = await fetch("answers.txt");
+    const [loadedAnswers, loadedGuesses] = await Promise.all([
+      loadWordList("answers.txt"),
+      loadWordList("valid-guesses.txt")
+    ]);
 
-    if (!response.ok) {
-      throw new Error("Could not load answers.txt");
-    }
-
-    const text = await response.text();
-    answerWords = text
-      .split(/\s+/)
-      .map((word) => word.trim().toLowerCase())
-      .filter((word) => /^[a-z]{5}$/.test(word));
-    guessWords = answerWords;
+    answerWords = loadedAnswers;
+    guessWords = loadedGuesses;
+    guessWordSet = new Set(guessWords);
     possibleAnswers = answerWords;
     appState.answerCount = answerWords.length;
+    appState.guessCount = guessWords.length;
     appState.answersLoaded = true;
+    appState.guessesLoaded = true;
     updateSuggestion();
     renderStatus();
   } catch {
-    renderStatus("Answer dictionary could not be loaded.");
+    renderStatus("Dictionaries could not be loaded.");
   }
 }
 
@@ -189,15 +207,6 @@ function getBestGuess(candidates) {
 function renderHistory() {
   historyOutput.innerHTML = "";
 
-  if (!submittedClues.length) {
-    return;
-  }
-
-  const title = document.createElement("p");
-  title.className = "history-title";
-  title.textContent = "Clues";
-  historyOutput.append(title);
-
   submittedClues.forEach((clue) => {
     const row = document.createElement("div");
     row.className = "history-row";
@@ -281,6 +290,11 @@ form.addEventListener("submit", (event) => {
     return;
   }
 
+  if (appState.guessesLoaded && !guessWordSet.has(guess)) {
+    renderStatus(`${guess.toUpperCase()} is not in the valid guesses list.`);
+    return;
+  }
+
   submittedClues.push({
     guess,
     feedback: [...feedbackStates]
@@ -291,7 +305,7 @@ form.addEventListener("submit", (event) => {
   resetCurrentGuess();
 });
 
-loadAnswerWords();
+loadDictionaries();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

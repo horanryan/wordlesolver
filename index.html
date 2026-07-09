@@ -189,7 +189,7 @@
       }
 
       .suggestion-label,
-      .history-title {
+      .board-label {
         margin: 0 0 8px;
         color: var(--muted);
         font-size: 13px;
@@ -210,20 +210,21 @@
 
       .history {
         display: grid;
-        gap: 6px;
-        margin-top: 20px;
+        gap: 5px;
+        margin-bottom: 5px;
       }
 
       .history-row {
         display: grid;
-        grid-template-columns: repeat(5, 32px);
-        gap: 4px;
+        grid-template-columns: repeat(5, 56px);
+        gap: 5px;
+        justify-content: center;
       }
 
       .history-row .tile {
-        width: 32px;
-        height: 32px;
-        font-size: 16px;
+        width: 56px;
+        height: 56px;
+        font-size: 28px;
       }
 
       @media (prefers-color-scheme: dark) {
@@ -249,7 +250,8 @@
         }
 
         .tile,
-        .guess-boxes {
+        .guess-boxes,
+        .history-row {
           grid-template-columns: repeat(5, 48px);
         }
 
@@ -268,8 +270,9 @@
 
       <section class="panel" aria-labelledby="guess-heading">
         <h2 id="guess-heading">Guess</h2>
+        <p class="board-label">Enter a word, then tap each box to mark the result.</p>
+        <div class="history" id="history" aria-label="Submitted clues"></div>
         <form id="guess-form">
-          <label for="guess">Enter a word</label>
           <button class="guess-boxes" type="button" aria-label="Enter a five-letter guess">
             <span class="tile guess-tile" data-index="0" aria-hidden="true"></span>
             <span class="tile guess-tile" data-index="1" aria-hidden="true"></span>
@@ -288,7 +291,6 @@
           <p class="best-guess" id="best-guess">-----</p>
           <p class="candidate-count" id="candidate-count">No clues entered yet.</p>
         </div>
-        <div class="history" id="history" aria-label="Submitted clues"></div>
       </section>
     </main>
 
