@@ -1,4 +1,4 @@
-const CACHE_NAME = "wordle-solver-v18";
+const CACHE_NAME = "wordle-solver-v19";
 const APP_SHELL = [
   "./",
   "./index.html",

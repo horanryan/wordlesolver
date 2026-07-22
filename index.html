@@ -3,29 +3,29 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#f7f7f4" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#171717" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#121213" media="(prefers-color-scheme: dark)">
     <meta name="description" content="A simple offline Wordle solver.">
     <title>Wordle Solver</title>
     <link rel="manifest" href="manifest.json">
     <style>
       :root {
         color-scheme: light dark;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        --page: #f7f7f4;
+        font-family: Arial, Helvetica, sans-serif;
+        --page: #ffffff;
         --surface: #ffffff;
-        --text: #202123;
-        --muted: #6e6e63;
-        --border: #d9d9d0;
-        --tile-empty: #ffffff;
-        --tile-filled: #202123;
-        --tile-absent: #6b6b6b;
+        --text: #000000;
+        --muted: #5a5a5a;
+        --border: #d3d6da;
+        --divider: #d3d6da;
+        --tile-filled: #878a8c;
+        --tile-absent: #787c7e;
         --tile-present: #c9b458;
-        --tile-correct: #10a37f;
-        --button: #202123;
-        --button-text: #ffffff;
-        --secondary-button: #ecece5;
-        --secondary-button-text: #202123;
+        --tile-correct: #6aaa64;
+        --key: #d3d6da;
+        --key-text: #000000;
+        --focus: #346eb7;
+        --tile-size: min(62px, calc((100vw - 48px) / 5));
         background: var(--page);
         color: var(--text);
       }
@@ -34,59 +34,209 @@
         box-sizing: border-box;
       }
 
+      html,
+      body {
+        min-height: 100%;
+      }
+
       body {
         margin: 0;
-        min-height: 100vh;
-        padding: 24px 16px calc(216px + env(safe-area-inset-bottom));
+        padding-bottom: calc(210px + env(safe-area-inset-bottom));
+        background: var(--page);
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      button:focus-visible,
+      .guess-boxes:focus-visible,
+      .switch input:focus-visible + .switch-track {
+        outline: 3px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      .app-header {
+        height: 55px;
+        border-bottom: 1px solid var(--divider);
+      }
+
+      .header-inner {
+        display: grid;
+        grid-template-columns: 44px 1fr 44px;
+        align-items: center;
+        width: min(100%, 520px);
+        height: 100%;
+        margin: 0 auto;
+        padding: 0 8px;
+      }
+
+      .wordmark {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 28px;
+        font-weight: 700;
+        line-height: 1;
+        text-align: center;
+        letter-spacing: -1px;
+      }
+
+      .wordmark span {
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1.6px;
+        text-transform: uppercase;
+      }
+
+      .brand-tile {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        justify-self: center;
+        background: var(--tile-correct);
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 700;
       }
 
       main {
-        width: min(100%, 440px);
+        width: min(100% - 28px, 420px);
         margin: 0 auto;
+        padding-top: 18px;
       }
 
-      h1 {
-        margin: 0;
-        font-size: 34px;
-        line-height: 1.05;
-        text-align: left;
-        letter-spacing: 0;
-      }
-
-      p {
-        margin: 12px 0 28px;
+      .intro {
+        margin: 0 0 16px;
         color: var(--muted);
-        line-height: 1.5;
-        text-align: left;
-      }
-
-      .panel {
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        background: var(--surface);
-        padding: 20px;
-      }
-
-      h2 {
-        margin: 0 0 14px;
         font-size: 13px;
-        line-height: 1.2;
-        text-transform: uppercase;
-        letter-spacing: 0;
+        line-height: 1.4;
+        text-align: center;
+      }
+
+      .mode-panel {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+        border-top: 1px solid var(--divider);
+        border-bottom: 1px solid var(--divider);
+        padding: 12px 2px;
+      }
+
+      .mode-copy {
+        min-width: 0;
+      }
+
+      .mode-title {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .mode-description {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.3;
+      }
+
+      .switch {
+        position: relative;
+        flex: 0 0 auto;
+        width: 46px;
+        height: 26px;
+      }
+
+      .switch input,
+      #guess {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .switch-track {
+        position: absolute;
+        inset: 0;
+        border-radius: 999px;
+        background: #878a8c;
+        transition: background 160ms ease;
+      }
+
+      .switch-track::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
+        transition: transform 160ms ease;
+      }
+
+      .switch input:checked + .switch-track {
+        background: var(--tile-correct);
+      }
+
+      .switch input:checked + .switch-track::after {
+        transform: translateX(20px);
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+      }
+
+      .board-label {
+        margin: 0 0 10px;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+      }
+
+      .history {
+        display: grid;
+        gap: 5px;
+        margin-bottom: 5px;
+      }
+
+      .history-row,
+      .guess-boxes {
+        display: grid;
+        grid-template-columns: repeat(5, var(--tile-size));
+        gap: 5px;
+        justify-content: center;
       }
 
       .tile {
-        width: 56px;
-        height: 56px;
+        width: var(--tile-size);
+        height: var(--tile-size);
         display: grid;
         place-items: center;
-        border: 1px solid var(--border);
-        background: var(--tile-empty);
+        border: 2px solid var(--border);
+        background: var(--surface);
         color: var(--text);
-        font-size: 28px;
-        font-weight: 600;
+        font-size: calc(var(--tile-size) * 0.52);
+        font-weight: 700;
         line-height: 1;
         text-transform: uppercase;
+        transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
       }
 
       .tile.absent,
@@ -108,56 +258,7 @@
         background: var(--tile-correct);
       }
 
-      input {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        opacity: 0;
-        pointer-events: none;
-      }
-
-      .actions {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        justify-content: flex-end;
-        margin-top: 16px;
-      }
-
-      button {
-        min-height: 44px;
-        border: 0;
-        border-radius: 999px;
-        padding: 8px 18px;
-        background: var(--button);
-        color: var(--button-text);
-        font: inherit;
-        font-weight: 600;
-        text-transform: none;
-        cursor: pointer;
-      }
-
-      button:disabled {
-        cursor: not-allowed;
-        opacity: 0.45;
-      }
-
-      .secondary-button {
-        background: var(--secondary-button);
-        color: var(--secondary-button-text);
-      }
-
-      button:focus-visible,
-      .guess-boxes:focus-visible {
-        outline: 3px solid #10a37f;
-        outline-offset: 2px;
-      }
-
       .guess-boxes {
-        display: grid;
-        grid-template-columns: repeat(5, 56px);
-        gap: 5px;
-        justify-content: center;
         width: fit-content;
         margin: 0 auto;
         border: 0;
@@ -170,6 +271,78 @@
         border-color: var(--tile-filled);
       }
 
+      .history-row .tile {
+        cursor: pointer;
+      }
+
+      .actions {
+        display: flex;
+        justify-content: center;
+        min-height: 34px;
+        margin-top: 8px;
+      }
+
+      .secondary-button {
+        min-height: 32px;
+        border: 1px solid var(--divider);
+        border-radius: 999px;
+        padding: 4px 15px;
+        background: var(--surface);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+      }
+
+      button:disabled {
+        cursor: default;
+        opacity: 0;
+      }
+
+      .suggestions {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        margin-top: 12px;
+        border: 1px solid var(--divider);
+        border-radius: 4px;
+        padding: 12px 14px;
+        background: var(--surface);
+      }
+
+      .suggestion-label {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+
+      .best-guess {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+
+      .candidate-count {
+        grid-column: 1 / -1;
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .status {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.35;
+        text-align: center;
+      }
+
       .keyboard {
         display: grid;
         gap: 8px;
@@ -178,10 +351,9 @@
         bottom: 0;
         left: 0;
         z-index: 10;
-        width: 100%;
-        max-width: 520px;
+        width: min(100%, 520px);
         margin: 0 auto;
-        padding: 10px 8px max(10px, env(safe-area-inset-bottom));
+        padding: 8px 8px max(8px, env(safe-area-inset-bottom));
         background: var(--page);
         touch-action: manipulation;
         user-select: none;
@@ -190,7 +362,7 @@
       .keyboard-row {
         display: grid;
         grid-template-columns: repeat(10, minmax(0, 1fr));
-        gap: 5px;
+        gap: 6px;
       }
 
       .keyboard-row:nth-child(2) {
@@ -198,23 +370,29 @@
       }
 
       .keyboard-row:nth-child(3) {
-        grid-template-columns: 1.45fr repeat(7, minmax(0, 1fr)) 1.45fr;
+        grid-template-columns: 1.5fr repeat(7, minmax(0, 1fr)) 1.5fr;
       }
 
       .keyboard-key {
         min-width: 0;
         min-height: 58px;
-        border-radius: 6px;
-        padding: 0 4px;
-        background: var(--secondary-button);
-        color: var(--secondary-button-text);
-        font-size: 16px;
+        border: 0;
+        border-radius: 4px;
+        padding: 0 3px;
+        background: var(--key);
+        color: var(--key-text);
+        font-size: 13px;
+        font-weight: 700;
         line-height: 1;
+        text-transform: uppercase;
       }
 
-      .keyboard-key[data-key="enter"],
+      .keyboard-key[data-key="enter"] {
+        font-size: 10px;
+      }
+
       .keyboard-key[data-key="backspace"] {
-        font-size: 12px;
+        font-size: 23px;
       }
 
       .keyboard-key.absent,
@@ -235,105 +413,69 @@
         background: var(--tile-correct);
       }
 
-      .status {
-        margin-top: 16px;
-        color: var(--muted);
-        font-size: 14px;
-      }
-
-      .suggestions {
-        margin-top: 20px;
-        border-top: 1px solid var(--border);
-        padding-top: 16px;
-      }
-
-      .suggestion-label,
-      .board-label {
-        margin: 0 0 8px;
-        color: var(--muted);
-        font-size: 13px;
-      }
-
-      .best-guess {
-        margin: 0;
-        font-size: 28px;
-        font-weight: 600;
-        text-transform: uppercase;
-      }
-
-      .candidate-count {
-        margin: 8px 0 0;
-        color: var(--muted);
-        font-size: 14px;
-      }
-
-      .history {
-        display: grid;
-        gap: 5px;
-        margin-bottom: 5px;
-      }
-
-      .history-row {
-        display: grid;
-        grid-template-columns: repeat(5, 56px);
-        gap: 5px;
-        justify-content: center;
-      }
-
-      .history-row .tile {
-        width: 56px;
-        height: 56px;
-        font-size: 28px;
-        cursor: pointer;
-      }
-
-      .history-row .tile:focus-visible {
-        outline: 3px solid #10a37f;
-        outline-offset: 2px;
-      }
-
       @media (prefers-color-scheme: dark) {
         :root {
-          --page: #171717;
-          --surface: #212121;
-          --text: #ececec;
-          --muted: #b4b4a8;
-          --border: #3f3f3f;
-          --tile-empty: #171717;
-          --tile-filled: #ececec;
-          --tile-absent: #5f5f5f;
+          --page: #121213;
+          --surface: #121213;
+          --text: #ffffff;
+          --muted: #a8a8a8;
+          --border: #3a3a3c;
+          --divider: #3a3a3c;
+          --tile-filled: #565758;
+          --tile-absent: #3a3a3c;
           --tile-present: #b59f3b;
-          --tile-correct: #10a37f;
-          --button: #ececec;
-          --button-text: #171717;
-          --secondary-button: #2f2f2f;
-          --secondary-button-text: #ececec;
+          --tile-correct: #538d4e;
+          --key: #818384;
+          --key-text: #ffffff;
+          --focus: #85b6f2;
         }
       }
 
-      @media (max-width: 380px) {
-        .tile,
-        .guess-boxes,
-        .history-row {
-          grid-template-columns: repeat(5, 48px);
+      @media (max-height: 720px) {
+        :root {
+          --tile-size: min(54px, calc((100vw - 48px) / 5));
         }
 
-        .tile {
-          width: 48px;
-          height: 48px;
-          font-size: 24px;
+        main {
+          padding-top: 10px;
+        }
+
+        .intro,
+        .mode-panel {
+          margin-bottom: 10px;
+        }
+
+        .keyboard-key {
+          min-height: 52px;
         }
       }
     </style>
   </head>
   <body>
+    <header class="app-header">
+      <div class="header-inner">
+        <span class="brand-tile" aria-hidden="true">W</span>
+        <h1 class="wordmark">Wordle <span>Solver</span></h1>
+        <span aria-hidden="true"></span>
+      </div>
+    </header>
     <main>
-      <h1>Wordle Solver</h1>
-      <p>A quiet offline helper for narrowing five-letter words.</p>
+      <p class="intro">Enter your result, then get the strongest next guess.</p>
 
-      <section class="panel" aria-labelledby="guess-heading">
-        <h2 id="guess-heading">Guess</h2>
-        <p class="board-label">Enter a word, then tap each box to mark the result.</p>
+      <label class="mode-panel" for="hard-mode-toggle">
+        <span class="mode-copy">
+          <span class="mode-title">Hard Mode</span>
+          <span class="mode-description">Greens stay put; yellows move to a new slot</span>
+        </span>
+        <span class="switch">
+          <input id="hard-mode-toggle" type="checkbox" role="switch">
+          <span class="switch-track" aria-hidden="true"></span>
+        </span>
+      </label>
+
+      <section aria-labelledby="guess-heading">
+        <h2 class="sr-only" id="guess-heading">Enter a guess</h2>
+        <p class="board-label">Type a word · tap each tile to change its color</p>
         <div class="history" id="history" aria-label="Submitted clues"></div>
         <form id="guess-form">
           <button class="guess-boxes" type="button" aria-label="Enter a five-letter guess">
@@ -345,15 +487,15 @@
           </button>
           <input id="guess" name="guess" maxlength="5" pattern="[A-Za-z]{5}" inputmode="text" autocomplete="off" aria-hidden="true" tabindex="-1">
           <div class="actions">
-            <button class="secondary-button" id="undo-button" type="button" disabled>Undo</button>
+            <button class="secondary-button" id="undo-button" type="button" disabled>Undo last</button>
           </div>
         </form>
-        <div class="status" id="status" role="status">Ready to work offline after the first load.</div>
         <div class="suggestions" aria-live="polite">
           <p class="suggestion-label">Best next guess</p>
           <p class="best-guess" id="best-guess">-----</p>
           <p class="candidate-count" id="candidate-count">No clues entered yet.</p>
         </div>
+        <div class="status" id="status" role="status">Ready to work offline after the first load.</div>
       </section>
     </main>
     <div class="keyboard" aria-label="Word keyboard">
@@ -381,7 +523,7 @@
         <button class="keyboard-key" type="button" data-key="l">L</button>
       </div>
       <div class="keyboard-row">
-        <button class="keyboard-key" type="button" data-key="backspace" aria-label="Backspace">DEL</button>
+        <button class="keyboard-key" type="button" data-key="enter">ENTER</button>
         <button class="keyboard-key" type="button" data-key="z">Z</button>
         <button class="keyboard-key" type="button" data-key="x">X</button>
         <button class="keyboard-key" type="button" data-key="c">C</button>
@@ -389,7 +531,7 @@
         <button class="keyboard-key" type="button" data-key="b">B</button>
         <button class="keyboard-key" type="button" data-key="n">N</button>
         <button class="keyboard-key" type="button" data-key="m">M</button>
-        <button class="keyboard-key" type="button" data-key="enter">ENTER</button>
+        <button class="keyboard-key" type="button" data-key="backspace" aria-label="Backspace">⌫</button>
       </div>
     </div>
 

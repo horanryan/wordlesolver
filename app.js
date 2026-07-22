@@ -8,6 +8,7 @@ const bestGuessOutput = document.querySelector("#best-guess");
 const candidateCountOutput = document.querySelector("#candidate-count");
 const historyOutput = document.querySelector("#history");
 const keyboardKeys = Array.from(document.querySelectorAll(".keyboard-key"));
+const hardModeToggle = document.querySelector("#hard-mode-toggle");
 const feedbackOrder = ["absent", "present", "correct"];
 const feedbackValues = {
   absent: 0,
@@ -172,9 +173,73 @@ function encodeFeedback(feedback) {
 }
 
 function getClueSignature() {
-  return submittedClues
+  const clues = submittedClues
     .map((clue) => `${clue.guess}:${encodeFeedback(clue.feedback)}`)
     .join("|");
+
+  return `${hardModeToggle.checked ? "hard" : "normal"}|${clues}`;
+}
+
+function getHardModeConstraints() {
+  const requiredPositions = Array.from({ length: 5 }, () => new Set());
+  const forbiddenPositions = Array.from({ length: 5 }, () => new Set());
+  const minimumCounts = {};
+
+  submittedClues.forEach((clue) => {
+    const clueCounts = {};
+
+    clue.feedback.forEach((state, index) => {
+      const letter = clue.guess[index];
+
+      if (state === "correct") {
+        requiredPositions[index].add(letter);
+      } else if (state === "present") {
+        forbiddenPositions[index].add(letter);
+      }
+
+      if (state === "correct" || state === "present") {
+        clueCounts[letter] = (clueCounts[letter] || 0) + 1;
+      }
+    });
+
+    Object.entries(clueCounts).forEach(([letter, count]) => {
+      minimumCounts[letter] = Math.max(minimumCounts[letter] || 0, count);
+    });
+  });
+
+  return { requiredPositions, forbiddenPositions, minimumCounts };
+}
+
+function isValidHardModeGuess(word, constraints) {
+  for (let index = 0; index < 5; index += 1) {
+    const requiredLetters = constraints.requiredPositions[index];
+
+    if (requiredLetters.size > 1 || (requiredLetters.size === 1 && !requiredLetters.has(word[index]))) {
+      return false;
+    }
+
+    if (constraints.forbiddenPositions[index].has(word[index])) {
+      return false;
+    }
+  }
+
+  const wordCounts = {};
+  word.split("").forEach((letter) => {
+    wordCounts[letter] = (wordCounts[letter] || 0) + 1;
+  });
+
+  return Object.entries(constraints.minimumCounts).every(([letter, count]) => {
+    return (wordCounts[letter] || 0) >= count;
+  });
+}
+
+function getEligibleGuesses() {
+  if (!hardModeToggle.checked || !submittedClues.length) {
+    return guessMetas;
+  }
+
+  const constraints = getHardModeConstraints();
+  return guessMetas.filter((guess) => isValidHardModeGuess(guess.word, constraints));
 }
 
 function getWordleFeedbackCode(answer, guess) {
@@ -235,7 +300,7 @@ function scoreGuessByPartitions(guess, candidates) {
   };
 }
 
-function getFastGuess(candidates) {
+function getFastGuess(candidates, eligibleGuesses) {
   const positionCounts = Array.from({ length: 5 }, () => ({}));
   const letterCounts = {};
   const candidateSet = new Set(candidates);
@@ -251,7 +316,7 @@ function getFastGuess(candidates) {
     }
   });
 
-  return guessMetas.reduce((best, guess) => {
+  const bestGuess = eligibleGuesses.reduce((best, guess) => {
     let score = candidateSet.has(guess.word) ? 0.5 : 0;
 
     guess.letters.forEach((letter, index) => {
@@ -270,7 +335,9 @@ function getFastGuess(candidates) {
     }
 
     return best;
-  }, null).word;
+  }, null);
+
+  return bestGuess ? bestGuess.word : "";
 }
 
 function isBetterGuess(candidate, best) {
@@ -298,17 +365,28 @@ function getBestGuess(candidates) {
     return "";
   }
 
-  if (candidates.length === 1) {
+  const eligibleGuesses = getEligibleGuesses();
+
+  if (!eligibleGuesses.length) {
+    return "";
+  }
+
+  if (candidates.length === 1 && eligibleGuesses.some((guess) => guess.word === candidates[0])) {
     return candidates[0];
   }
 
   if (candidates.length > EXACT_SCORING_LIMIT) {
-    return getFastGuess(candidates);
+    return getFastGuess(candidates, eligibleGuesses);
   }
 
   const candidateSet = new Set(candidates);
-  const guessesToScore = candidates.length <= 2 ? candidates : guessWords;
-  return guessesToScore.reduce((best, word) => {
+  const eligibleWords = eligibleGuesses.map((guess) => guess.word);
+  const eligibleWordSet = new Set(eligibleWords);
+  const eligibleCandidates = candidates.filter((word) => eligibleWordSet.has(word));
+  const guessesToScore = candidates.length <= 2 && eligibleCandidates.length
+    ? eligibleCandidates
+    : eligibleWords;
+  const bestGuess = guessesToScore.reduce((best, word) => {
     const score = scoreGuessByPartitions(word, candidates);
     const candidate = {
       word,
@@ -321,7 +399,9 @@ function getBestGuess(candidates) {
     }
 
     return best;
-  }, null).word;
+  }, null);
+
+  return bestGuess ? bestGuess.word : "";
 }
 
 function renderHistory() {
@@ -409,7 +489,8 @@ function updateSuggestion() {
     : answerWords;
 
   const bestGuess = getBestGuess(possibleAnswers);
-  const message = `${possibleAnswers.length.toLocaleString()} possible answer${possibleAnswers.length === 1 ? "" : "s"} remaining.`;
+  const modeLabel = hardModeToggle.checked ? " · Hard Mode" : "";
+  const message = `${possibleAnswers.length.toLocaleString()} possible answer${possibleAnswers.length === 1 ? "" : "s"} remaining${modeLabel}.`;
   bestGuessOutput.textContent = bestGuess || "-----";
   candidateCountOutput.textContent = message;
   cacheSuggestion(signature, {
@@ -519,6 +600,17 @@ undoButton.addEventListener("click", () => {
   guessBoxes.focus();
 });
 
+hardModeToggle.addEventListener("change", () => {
+  try {
+    localStorage.setItem("wordle-solver-hard-mode", hardModeToggle.checked ? "true" : "false");
+  } catch {
+    // The toggle still works when browser storage is unavailable.
+  }
+
+  updateSuggestion();
+  renderStatus(`Hard Mode ${hardModeToggle.checked ? "enabled" : "disabled"}.`);
+});
+
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   const guess = guessInput.value.trim().toLowerCase();
@@ -542,6 +634,12 @@ form.addEventListener("submit", (event) => {
   renderStatus(`${guess.toUpperCase()} added as a clue.`);
   resetCurrentGuess();
 });
+
+try {
+  hardModeToggle.checked = localStorage.getItem("wordle-solver-hard-mode") === "true";
+} catch {
+  hardModeToggle.checked = false;
+}
 
 loadDictionaries();
 
