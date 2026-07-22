@@ -38,6 +38,10 @@ let possibleAnswers = [];
 let feedbackStates = Array(5).fill("absent");
 const submittedClues = [];
 const suggestionCache = new Map();
+let solverWorker = null;
+let workerReady = false;
+let suggestionRequestId = 0;
+let suggestionTimer = null;
 
 function cacheSuggestion(signature, suggestion) {
   if (suggestionCache.size >= MAX_SUGGESTION_CACHE_SIZE) {
@@ -45,6 +49,76 @@ function cacheSuggestion(signature, suggestion) {
   }
 
   suggestionCache.set(signature, suggestion);
+}
+
+function renderSuggestion(bestGuess, possibleCount) {
+  const modeLabel = hardModeToggle.checked ? " · Hard Mode" : "";
+  const message = `${possibleCount.toLocaleString()} possible answer${possibleCount === 1 ? "" : "s"} remaining${modeLabel}.`;
+  bestGuessOutput.textContent = bestGuess || "-----";
+  candidateCountOutput.textContent = message;
+  return message;
+}
+
+function prepareSynchronousSolver() {
+  if (!guessMetas.length) {
+    guessMetas = guessWords.map(createWordMeta);
+  }
+}
+
+function useSynchronousFallback(message) {
+  clearTimeout(suggestionTimer);
+  suggestionTimer = null;
+
+  if (solverWorker) {
+    solverWorker.onerror = null;
+    solverWorker.terminate();
+  }
+
+  solverWorker = null;
+  workerReady = false;
+  prepareSynchronousSolver();
+  renderStatus(message);
+  updateSuggestion();
+}
+
+function startSolverWorker() {
+  if (!("Worker" in window)) {
+    return false;
+  }
+
+  try {
+    solverWorker = new Worker("solver-worker.js");
+    solverWorker.addEventListener("message", (event) => {
+      if (event.data.type === "ready") {
+        workerReady = true;
+        updateSuggestion();
+        return;
+      }
+
+      if (event.data.type !== "suggestion" || event.data.requestId !== suggestionRequestId) {
+        return;
+      }
+
+      const message = renderSuggestion(event.data.bestGuess, event.data.possibleCount);
+      cacheSuggestion(getClueSignature(), {
+        bestGuess: event.data.bestGuess,
+        possibleCount: event.data.possibleCount,
+        message
+      });
+    });
+    solverWorker.addEventListener("error", () => {
+      useSynchronousFallback("Fast solver unavailable; using compatibility mode.");
+    }, { once: true });
+    solverWorker.postMessage({
+      type: "initialize",
+      answers: answerWords,
+      guesses: guessWords
+    });
+    return true;
+  } catch {
+    solverWorker = null;
+    return false;
+  }
 }
 
 function renderStatus(message) {
@@ -114,14 +188,19 @@ async function loadDictionaries() {
 
     answerWords = loadedAnswers;
     guessWords = loadedGuesses;
-    guessMetas = guessWords.map(createWordMeta);
     guessWordSet = new Set(guessWords);
     possibleAnswers = answerWords;
     appState.answerCount = answerWords.length;
     appState.guessCount = guessWords.length;
     appState.answersLoaded = true;
     appState.guessesLoaded = true;
-    updateSuggestion();
+    if (startSolverWorker()) {
+      bestGuessOutput.textContent = "-----";
+      candidateCountOutput.textContent = "Preparing the fast solver…";
+    } else {
+      prepareSynchronousSolver();
+      updateSuggestion();
+    }
     renderStatus();
   } catch {
     renderStatus("Dictionaries could not be loaded.");
@@ -467,13 +546,45 @@ function updateSuggestion() {
     return;
   }
 
+  const requestId = ++suggestionRequestId;
+  clearTimeout(suggestionTimer);
+  suggestionTimer = null;
   const signature = getClueSignature();
   const cachedSuggestion = suggestionCache.get(signature);
 
   if (cachedSuggestion) {
-    possibleAnswers = cachedSuggestion.possibleAnswers;
+    if (cachedSuggestion.possibleAnswers) {
+      possibleAnswers = cachedSuggestion.possibleAnswers;
+    }
     bestGuessOutput.textContent = cachedSuggestion.bestGuess || "-----";
     candidateCountOutput.textContent = cachedSuggestion.message;
+    return;
+  }
+
+  if (solverWorker) {
+    if (!workerReady) {
+      bestGuessOutput.textContent = "-----";
+      candidateCountOutput.textContent = "Preparing the fast solver…";
+      return;
+    }
+
+    candidateCountOutput.textContent = "Finding the best next guess…";
+    suggestionTimer = setTimeout(() => {
+      if (requestId !== suggestionRequestId || !solverWorker || !workerReady) {
+        return;
+      }
+
+      solverWorker.postMessage({
+        type: "suggest",
+        requestId,
+        clues: submittedClues.map((clue) => ({
+          guess: clue.guess,
+          feedback: [...clue.feedback]
+        })),
+        hardMode: hardModeToggle.checked
+      });
+      suggestionTimer = null;
+    }, 40);
     return;
   }
 
@@ -489,10 +600,7 @@ function updateSuggestion() {
     : answerWords;
 
   const bestGuess = getBestGuess(possibleAnswers);
-  const modeLabel = hardModeToggle.checked ? " · Hard Mode" : "";
-  const message = `${possibleAnswers.length.toLocaleString()} possible answer${possibleAnswers.length === 1 ? "" : "s"} remaining${modeLabel}.`;
-  bestGuessOutput.textContent = bestGuess || "-----";
-  candidateCountOutput.textContent = message;
+  const message = renderSuggestion(bestGuess, possibleAnswers.length);
   cacheSuggestion(signature, {
     bestGuess,
     possibleAnswers,
