@@ -1,4 +1,4 @@
-const EXACT_SCORING_LIMIT = 350;
+const ANSWER_GUESS_INCLUSION_LIMIT = 350;
 const EXACT_SHORTLIST_SIZE = 800;
 const PARTITION_COUNT = 243;
 
@@ -288,12 +288,14 @@ function getExactShortlist(rankedGuesses, candidates) {
     included.add(guessIndex);
   }
 
-  for (let index = 0; index < candidates.length; index += 1) {
-    const guessIndex = guessIndexByWord.get(answerWords[candidates[index]]);
+  if (candidates.length <= ANSWER_GUESS_INCLUSION_LIMIT) {
+    for (let index = 0; index < candidates.length; index += 1) {
+      const guessIndex = guessIndexByWord.get(answerWords[candidates[index]]);
 
-    if (guessIndex !== undefined && !included.has(guessIndex)) {
-      shortlist.push(guessIndex);
-      included.add(guessIndex);
+      if (guessIndex !== undefined && !included.has(guessIndex)) {
+        shortlist.push(guessIndex);
+        included.add(guessIndex);
+      }
     }
   }
 
@@ -303,7 +305,7 @@ function getExactShortlist(rankedGuesses, candidates) {
 function getBestExactGuess(guessesToScore, candidates) {
   const buckets = new Uint16Array(PARTITION_COUNT);
   const candidateWords = new Set(candidates.map((index) => answerWords[index]));
-  let best = null;
+  const rankedGuesses = [];
 
   for (let poolIndex = 0; poolIndex < guessesToScore.length; poolIndex += 1) {
     const guessIndex = guessesToScore[poolIndex];
@@ -315,47 +317,49 @@ function getBestExactGuess(guessesToScore, candidates) {
       buckets[getFeedbackCode(answerLetters, answerOffset, guessLetters, guessOffset)] += 1;
     }
 
+    let informationCost = 0;
     let expectedRemainingScore = 0;
     let worstBucketSize = 0;
 
     for (let bucketIndex = 0; bucketIndex < PARTITION_COUNT; bucketIndex += 1) {
       const bucketSize = buckets[bucketIndex];
+      if (bucketSize > 1) {
+        informationCost += bucketSize * Math.log2(bucketSize);
+      }
       expectedRemainingScore += bucketSize * bucketSize;
       worstBucketSize = Math.max(worstBucketSize, bucketSize);
     }
 
     const word = guessWords[guessIndex];
-    const candidate = {
+    rankedGuesses.push({
       word,
+      informationCost,
       expectedRemainingScore,
       worstBucketSize,
       isPossibleAnswer: candidateWords.has(word)
-    };
-
-    if (
-      !best ||
-      candidate.expectedRemainingScore < best.expectedRemainingScore ||
-      (candidate.expectedRemainingScore === best.expectedRemainingScore &&
-        candidate.worstBucketSize < best.worstBucketSize) ||
-      (candidate.expectedRemainingScore === best.expectedRemainingScore &&
-        candidate.worstBucketSize === best.worstBucketSize &&
-        candidate.isPossibleAnswer &&
-        !best.isPossibleAnswer) ||
-      (candidate.expectedRemainingScore === best.expectedRemainingScore &&
-        candidate.worstBucketSize === best.worstBucketSize &&
-        candidate.isPossibleAnswer === best.isPossibleAnswer &&
-        candidate.word < best.word)
-    ) {
-      best = candidate;
-    }
+    });
   }
 
-  return best ? best.word : "";
+  rankedGuesses.sort((left, right) => {
+    return left.informationCost - right.informationCost ||
+      left.worstBucketSize - right.worstBucketSize ||
+      left.expectedRemainingScore - right.expectedRemainingScore ||
+      Number(right.isPossibleAnswer) - Number(left.isPossibleAnswer) ||
+      left.word.localeCompare(right.word);
+  });
+
+  return rankedGuesses.slice(0, 3).map(({ word, informationCost, worstBucketSize }) => ({
+    word,
+    information: candidates.length
+      ? Math.log2(candidates.length) - informationCost / candidates.length
+      : 0,
+    worstCase: worstBucketSize
+  }));
 }
 
 function getBestGuess(candidates, eligibleGuesses) {
   if (!candidates.length || !eligibleGuesses.length) {
-    return "";
+    return [];
   }
 
   if (candidates.length === 1) {
@@ -363,15 +367,11 @@ function getBestGuess(candidates, eligibleGuesses) {
     const guessIndex = guessIndexByWord.get(answer);
 
     if (guessIndex !== undefined && eligibleGuesses.includes(guessIndex)) {
-      return answer;
+      return [{ word: answer, information: 0, worstCase: 1 }];
     }
   }
 
   const rankedGuesses = rankGuessesByHeuristic(eligibleGuesses, candidates);
-
-  if (candidates.length > EXACT_SCORING_LIMIT) {
-    return rankedGuesses.length ? guessWords[rankedGuesses[0].guessIndex] : "";
-  }
 
   if (candidates.length <= 2) {
     const eligibleSet = new Set(eligibleGuesses);
@@ -401,13 +401,15 @@ function suggest(data) {
   const startedAt = performance.now();
   const candidates = getPossibleAnswerIndices(data.clues);
   const eligibleGuesses = getEligibleGuessIndices(data.clues, data.hardMode);
-  const bestGuess = getBestGuess(candidates, eligibleGuesses);
+  const suggestions = getBestGuess(candidates, eligibleGuesses);
 
   self.postMessage({
     type: "suggestion",
     requestId: data.requestId,
-    bestGuess,
+    bestGuess: suggestions.length ? suggestions[0].word : "",
+    suggestions,
     possibleCount: candidates.length,
+    answerPreview: candidates.slice(0, 50).map((index) => answerWords[index]),
     durationMs: performance.now() - startedAt
   });
 }

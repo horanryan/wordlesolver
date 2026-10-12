@@ -305,9 +305,10 @@
         grid-template-columns: 1fr auto;
         align-items: center;
         margin-top: 12px;
-        border: 1px solid var(--divider);
-        border-radius: 4px;
-        padding: 12px 14px;
+        border: 1px solid var(--tile-correct);
+        border-left-width: 5px;
+        border-radius: 8px;
+        padding: 14px 16px;
         background: var(--surface);
       }
 
@@ -335,6 +336,101 @@
         font-size: 12px;
       }
 
+      .results-grid {
+        display: grid;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .results-panel {
+        min-width: 0;
+        border: 1px solid var(--divider);
+        border-radius: 8px;
+        padding: 12px;
+        background: var(--surface);
+      }
+
+      .results-heading {
+        margin: 0 0 10px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+
+      .guess-recommendations {
+        display: grid;
+        gap: 6px;
+      }
+
+      .guess-recommendation {
+        display: grid;
+        grid-template-columns: 22px minmax(48px, auto) 1fr;
+        align-items: center;
+        gap: 9px;
+        width: 100%;
+        border: 1px solid var(--divider);
+        border-radius: 5px;
+        padding: 7px 9px;
+        background: var(--surface);
+        color: var(--text);
+        text-align: left;
+      }
+
+      .guess-recommendation:hover {
+        border-color: var(--tile-correct);
+      }
+
+      .recommendation-rank {
+        display: grid;
+        width: 20px;
+        height: 20px;
+        place-items: center;
+        border-radius: 3px;
+        background: var(--tile-correct);
+        color: #ffffff;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .recommendation-word {
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+
+      .recommendation-detail {
+        color: var(--muted);
+        font-size: 11px;
+        text-align: right;
+      }
+
+      .possible-answers {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        min-height: 22px;
+        align-items: flex-start;
+      }
+
+      .possible-answer,
+      .answers-overflow {
+        border-radius: 3px;
+        padding: 4px 6px;
+        background: var(--key);
+        color: var(--key-text);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+      }
+
+      .answers-overflow {
+        background: var(--tile-absent);
+        color: #ffffff;
+      }
+
       .status {
         margin: 10px 0 0;
         color: var(--muted);
@@ -353,8 +449,10 @@
         z-index: 10;
         width: min(100%, 520px);
         margin: 0 auto;
-        padding: 8px 8px max(8px, env(safe-area-inset-bottom));
+        border-top: 1px solid var(--divider);
+        padding: 10px 8px max(8px, env(safe-area-inset-bottom));
         background: var(--page);
+        box-shadow: 0 -4px 16px rgb(0 0 0 / 4%);
         touch-action: manipulation;
         user-select: none;
       }
@@ -392,7 +490,14 @@
       }
 
       .keyboard-key[data-key="backspace"] {
-        font-size: 23px;
+        display: grid;
+        place-items: center;
+      }
+
+      .keyboard-key[data-key="backspace"] svg {
+        width: 22px;
+        height: 22px;
+        fill: currentColor;
       }
 
       .keyboard-key.absent,
@@ -449,6 +554,22 @@
           min-height: 52px;
         }
       }
+
+      @media (min-width: 520px) {
+        .results-grid {
+          grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+          align-items: start;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
     </style>
   </head>
   <body>
@@ -490,10 +611,20 @@
             <button class="secondary-button" id="undo-button" type="button" disabled>Undo last</button>
           </div>
         </form>
-        <div class="suggestions" aria-live="polite">
+        <div class="suggestions" aria-live="polite" aria-atomic="true">
           <p class="suggestion-label">Best next guess</p>
           <p class="best-guess" id="best-guess">-----</p>
           <p class="candidate-count" id="candidate-count">No clues entered yet.</p>
+        </div>
+        <div class="results-grid">
+          <section class="results-panel" aria-labelledby="recommendations-heading">
+            <h2 class="results-heading" id="recommendations-heading">Top next guesses</h2>
+            <div class="guess-recommendations" id="guess-recommendations"></div>
+          </section>
+          <section class="results-panel" aria-labelledby="answers-heading">
+            <h2 class="results-heading" id="answers-heading">Possible answers</h2>
+            <div class="possible-answers" id="possible-answers" aria-live="polite"></div>
+          </section>
         </div>
         <div class="status" id="status" role="status">Ready to work offline after the first load.</div>
       </section>
@@ -531,7 +662,11 @@
         <button class="keyboard-key" type="button" data-key="b">B</button>
         <button class="keyboard-key" type="button" data-key="n">N</button>
         <button class="keyboard-key" type="button" data-key="m">M</button>
-        <button class="keyboard-key" type="button" data-key="backspace" aria-label="Backspace">⌫</button>
+        <button class="keyboard-key" type="button" data-key="backspace" aria-label="Backspace">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M22 3H7a2 2 0 0 0-1.6.8l-5 6.7a2.5 2.5 0 0 0 0 3l5 6.7A2 2 0 0 0 7 21h15a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-2.6 13.2L18 17.6l-3.5-3.5L11 17.6l-1.4-1.4 3.5-3.5-3.5-3.5L11 7.8l3.5 3.5L18 7.8l1.4 1.4-3.5 3.5Z"/>
+          </svg>
+        </button>
       </div>
     </div>
 

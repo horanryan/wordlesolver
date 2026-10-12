@@ -64,6 +64,11 @@ vm.runInNewContext(fs.readFileSync("solver-worker.js", "utf8"), context);
 
 const answers = parseWords("answers.txt");
 const guesses = parseWords("valid-guesses.txt");
+const guessSet = new Set(guesses);
+assert.equal(guessSet.size, guesses.length, "Guess list contains duplicates");
+assert.ok(answers.every((answer) => guessSet.has(answer)), "Every answer must be a valid guess");
+assert.deepEqual(answers, [...answers].sort(), "Answer list should be sorted");
+assert.deepEqual(guesses, [...guesses].sort(), "Guess list should be sorted");
 listeners.message({ data: { type: "initialize", answers, guesses } });
 assert.equal(messages.shift().type, "ready");
 
@@ -93,6 +98,11 @@ const opening = messages.shift();
 assert.equal(opening.type, "suggestion");
 assert.equal(opening.possibleCount, answers.length);
 assert.match(opening.bestGuess, /^[a-z]{5}$/);
+assert.equal(opening.suggestions.length, 3);
+assert.equal(opening.suggestions[0].word, opening.bestGuess);
+assert.deepEqual(Array.from(opening.answerPreview), answers.slice(0, 50));
+assert.ok(opening.suggestions[0].information >= opening.suggestions[1].information);
+assert.ok(opening.suggestions[1].information >= opening.suggestions[2].information);
 
 const target = "cigar";
 const guess = "raise";
@@ -109,6 +119,8 @@ const constrained = messages.shift();
 assert.equal(constrained.type, "suggestion");
 assert.ok(constrained.possibleCount > 0);
 assert.match(constrained.bestGuess, /^[a-z]{5}$/);
+assert.equal(constrained.suggestions[0].word, constrained.bestGuess);
+assert.ok(constrained.answerPreview.length <= 50);
 
 feedback.forEach((state, index) => {
   if (state === "correct") {
@@ -121,6 +133,23 @@ feedback.forEach((state, index) => {
 
 assert.ok(opening.durationMs < 1500, `Opening suggestion took ${opening.durationMs.toFixed(1)} ms`);
 assert.ok(constrained.durationMs < 1500, `Constrained suggestion took ${constrained.durationMs.toFixed(1)} ms`);
+
+listeners.message({
+  data: {
+    type: "suggest",
+    requestId: 4,
+    clues: [
+      { guess: "cigar", feedback: Array(5).fill("correct") },
+      { guess: "raise", feedback: Array(5).fill("correct") }
+    ],
+    hardMode: false
+  }
+});
+const noMatches = messages.shift();
+assert.equal(noMatches.possibleCount, 0);
+assert.equal(noMatches.bestGuess, "");
+assert.deepEqual(Array.from(noMatches.suggestions), []);
+assert.deepEqual(Array.from(noMatches.answerPreview), []);
 
 const partitions = new Map();
 answers.forEach((answer) => {

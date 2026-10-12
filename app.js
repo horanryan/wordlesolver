@@ -6,6 +6,8 @@ const undoButton = document.querySelector("#undo-button");
 const statusOutput = document.querySelector("#status");
 const bestGuessOutput = document.querySelector("#best-guess");
 const candidateCountOutput = document.querySelector("#candidate-count");
+const recommendationsOutput = document.querySelector("#guess-recommendations");
+const possibleAnswersOutput = document.querySelector("#possible-answers");
 const historyOutput = document.querySelector("#history");
 const keyboardKeys = Array.from(document.querySelectorAll(".keyboard-key"));
 const hardModeToggle = document.querySelector("#hard-mode-toggle");
@@ -51,11 +53,54 @@ function cacheSuggestion(signature, suggestion) {
   suggestionCache.set(signature, suggestion);
 }
 
-function renderSuggestion(bestGuess, possibleCount) {
+function renderSuggestion(bestGuess, possibleCount, suggestions = [], answerPreview = []) {
   const modeLabel = hardModeToggle.checked ? " · Hard Mode" : "";
   const message = `${possibleCount.toLocaleString()} possible answer${possibleCount === 1 ? "" : "s"} remaining${modeLabel}.`;
   bestGuessOutput.textContent = bestGuess || "-----";
   candidateCountOutput.textContent = message;
+  recommendationsOutput.replaceChildren();
+  suggestions.forEach(({ word, information, worstCase }, index) => {
+    const button = document.createElement("button");
+    button.className = "guess-recommendation";
+    button.type = "button";
+    button.dataset.guess = word;
+    button.setAttribute("aria-label", `Use ${word.toUpperCase()} as your next guess`);
+    const rank = document.createElement("span");
+    rank.className = "recommendation-rank";
+    rank.textContent = String(index + 1);
+    const recommendationWord = document.createElement("span");
+    recommendationWord.className = "recommendation-word";
+    recommendationWord.textContent = word;
+    const detail = document.createElement("span");
+    detail.className = "recommendation-detail";
+    detail.textContent = Number.isFinite(information) && Number.isFinite(worstCase)
+      ? `${information.toFixed(2)} bits · ${worstCase} max`
+      : "Fast rank";
+    button.append(rank, recommendationWord, detail);
+    recommendationsOutput.append(button);
+  });
+
+  possibleAnswersOutput.replaceChildren();
+  if (!submittedClues.length) {
+    possibleAnswersOutput.textContent = "Add a clue to narrow down the answer list.";
+  } else if (!possibleCount) {
+    possibleAnswersOutput.textContent = "No matching answers. Check the tile colors in your clues.";
+  } else {
+    answerPreview.forEach((word) => {
+      const answer = document.createElement("span");
+      answer.className = "possible-answer";
+      answer.textContent = word;
+      possibleAnswersOutput.append(answer);
+    });
+
+    if (possibleCount > answerPreview.length) {
+      const remaining = document.createElement("span");
+      remaining.className = "answers-overflow";
+      remaining.textContent = `+${(possibleCount - answerPreview.length).toLocaleString()} more`;
+      possibleAnswersOutput.append(remaining);
+    }
+  }
+
   return message;
 }
 
@@ -99,10 +144,17 @@ function startSolverWorker() {
         return;
       }
 
-      const message = renderSuggestion(event.data.bestGuess, event.data.possibleCount);
+      const message = renderSuggestion(
+        event.data.bestGuess,
+        event.data.possibleCount,
+        event.data.suggestions,
+        event.data.answerPreview
+      );
       cacheSuggestion(getClueSignature(), {
         bestGuess: event.data.bestGuess,
         possibleCount: event.data.possibleCount,
+        suggestions: event.data.suggestions,
+        answerPreview: event.data.answerPreview,
         message
       });
     });
@@ -128,12 +180,12 @@ function renderStatus(message) {
   }
 
   if (appState.answersLoaded && appState.guessesLoaded && appState.offlineReady) {
-    statusOutput.textContent = `Loaded ${appState.answerCount.toLocaleString()} answers and ${appState.guessCount.toLocaleString()} valid guesses. Offline support is installed.`;
+    statusOutput.textContent = `Loaded ${appState.answerCount.toLocaleString()} possible answers and ${appState.guessCount.toLocaleString()} valid guesses from the expanded English lists. Not the official NYT answer pool. Offline support is installed.`;
     return;
   }
 
   if (appState.answersLoaded && appState.guessesLoaded) {
-    statusOutput.textContent = `Loaded ${appState.answerCount.toLocaleString()} answers and ${appState.guessCount.toLocaleString()} valid guesses.`;
+    statusOutput.textContent = `Loaded ${appState.answerCount.toLocaleString()} possible answers and ${appState.guessCount.toLocaleString()} valid guesses from the expanded English lists. Not the official NYT answer pool.`;
     return;
   }
 
@@ -141,10 +193,10 @@ function renderStatus(message) {
 }
 
 function parseWordList(text) {
-  return text
+  return [...new Set(text
     .split(/\s+/)
     .map((word) => word.trim().toLowerCase())
-    .filter((word) => /^[a-z]{5}$/.test(word));
+    .filter((word) => /^[a-z]{5}$/.test(word)))];
 }
 
 async function loadWordList(path) {
@@ -187,7 +239,7 @@ async function loadDictionaries() {
     ]);
 
     answerWords = loadedAnswers;
-    guessWords = loadedGuesses;
+    guessWords = [...new Set([...loadedGuesses, ...loadedAnswers])];
     guessWordSet = new Set(guessWords);
     possibleAnswers = answerWords;
     appState.answerCount = answerWords.length;
@@ -553,11 +605,12 @@ function updateSuggestion() {
   const cachedSuggestion = suggestionCache.get(signature);
 
   if (cachedSuggestion) {
-    if (cachedSuggestion.possibleAnswers) {
-      possibleAnswers = cachedSuggestion.possibleAnswers;
-    }
-    bestGuessOutput.textContent = cachedSuggestion.bestGuess || "-----";
-    candidateCountOutput.textContent = cachedSuggestion.message;
+    renderSuggestion(
+      cachedSuggestion.bestGuess,
+      cachedSuggestion.possibleCount ?? possibleAnswers.length,
+      cachedSuggestion.suggestions || [],
+      cachedSuggestion.answerPreview || possibleAnswers.slice(0, 50)
+    );
     return;
   }
 
@@ -600,10 +653,17 @@ function updateSuggestion() {
     : answerWords;
 
   const bestGuess = getBestGuess(possibleAnswers);
-  const message = renderSuggestion(bestGuess, possibleAnswers.length);
+  const suggestions = bestGuess
+    ? [{ word: bestGuess, information: null, worstCase: null }]
+    : [];
+  const answerPreview = possibleAnswers.slice(0, 50);
+  const message = renderSuggestion(bestGuess, possibleAnswers.length, suggestions, answerPreview);
   cacheSuggestion(signature, {
     bestGuess,
     possibleAnswers,
+    possibleCount: possibleAnswers.length,
+    suggestions,
+    answerPreview,
     message
   });
 }
@@ -624,6 +684,17 @@ guessTiles.forEach((tile, index) => {
     cycleFeedback(index);
     guessBoxes.focus();
   });
+});
+
+recommendationsOutput.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-guess]");
+
+  if (!button) {
+    return;
+  }
+
+  updateGuess(button.dataset.guess);
+  guessBoxes.focus();
 });
 
 historyOutput.addEventListener("click", (event) => {
