@@ -67,6 +67,8 @@ const guesses = parseWords("valid-guesses.txt");
 const guessSet = new Set(guesses);
 assert.equal(guessSet.size, guesses.length, "Guess list contains duplicates");
 assert.ok(answers.every((answer) => guessSet.has(answer)), "Every answer must be a valid guess");
+assert.ok(answers.includes("uncap"), "Known missing answer uncap must be included");
+assert.ok(answers.includes("yodel"), "Known missing answer yodel must be included");
 assert.deepEqual(answers, [...answers].sort(), "Answer list should be sorted");
 assert.deepEqual(guesses, [...guesses].sort(), "Guess list should be sorted");
 listeners.message({ data: { type: "initialize", answers, guesses } });

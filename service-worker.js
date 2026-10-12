@@ -1,10 +1,12 @@
-const CACHE_NAME = "wordle-solver-v25";
+const CACHE_NAME = "wordle-solver-v27";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./app.js",
   "./solver-worker.js",
   "./manifest.json",
+  "./icon.svg",
+  "./apple-touch-icon.png",
   "./answers.txt",
   "./valid-guesses.txt"
 ];

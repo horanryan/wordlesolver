@@ -21,8 +21,9 @@ million tokens) that were already in the existing guess list. The additions
 derived from wordfreq are subject to CC BY-SA 4.0; the pre-existing entries
 remain subject to their original terms.
 
-`uncap` is also included as a possible answer; it was missing from the
-frequency-filtered answer list despite being present in the valid-guess list.
+`uncap` and `yodel` are also included as possible answers; both were missing
+from the frequency-filtered answer list despite being present in the
+valid-guess list.
 
 These expanded English lists are not the official NYT Wordle answer or guess
 lists, and they may contain words NYT does not use.
