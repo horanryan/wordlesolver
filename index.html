@@ -440,8 +440,10 @@
       }
 
       .keyboard {
+        --keyboard-gap: clamp(3px, 1.25vw, 6px);
+        --keyboard-key-height: clamp(42px, min(7.2vh, 12vw), 58px);
         display: grid;
-        gap: 8px;
+        gap: clamp(5px, 1.5vw, 8px);
         position: fixed;
         right: 0;
         bottom: 0;
@@ -450,7 +452,7 @@
         width: min(100%, 520px);
         margin: 0 auto;
         border-top: 1px solid var(--divider);
-        padding: 10px 8px max(8px, env(safe-area-inset-bottom));
+        padding: 10px clamp(4px, 2vw, 8px) max(8px, env(safe-area-inset-bottom));
         background: var(--page);
         box-shadow: 0 -4px 16px rgb(0 0 0 / 4%);
         touch-action: manipulation;
@@ -460,11 +462,13 @@
       .keyboard-row {
         display: grid;
         grid-template-columns: repeat(10, minmax(0, 1fr));
-        gap: 6px;
+        gap: var(--keyboard-gap);
       }
 
       .keyboard-row:nth-child(2) {
-        padding: 0 5%;
+        width: 90%;
+        margin-inline: auto;
+        grid-template-columns: repeat(9, minmax(0, 1fr));
       }
 
       .keyboard-row:nth-child(3) {
@@ -473,7 +477,7 @@
 
       .keyboard-key {
         min-width: 0;
-        min-height: 58px;
+        min-height: var(--keyboard-key-height);
         border: 0;
         border-radius: 4px;
         padding: 0 3px;
@@ -548,10 +552,6 @@
         .intro,
         .mode-panel {
           margin-bottom: 10px;
-        }
-
-        .keyboard-key {
-          min-height: 52px;
         }
       }
 
