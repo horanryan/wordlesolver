@@ -63,14 +63,20 @@ const context = {
 vm.runInNewContext(fs.readFileSync("solver-worker.js", "utf8"), context);
 
 const answers = parseWords("answers.txt");
-const guesses = parseWords("valid-guesses.txt");
+const validGuesses = parseWords("valid-guesses.txt");
+const guesses = [...new Set([...validGuesses, ...answers])];
 const guessSet = new Set(guesses);
 assert.equal(guessSet.size, guesses.length, "Guess list contains duplicates");
+assert.equal(new Set(answers).size, answers.length, "Answer list contains duplicates");
 assert.ok(answers.every((answer) => guessSet.has(answer)), "Every answer must be a valid guess");
+assert.equal(validGuesses.length, 12930, "Use the smaller pre-expansion guess list");
+assert.ok(answers.includes("moxie"), "Known missing answer moxie must be included");
 assert.ok(answers.includes("uncap"), "Known missing answer uncap must be included");
 assert.ok(answers.includes("yodel"), "Known missing answer yodel must be included");
+assert.ok(guesses.includes("areas"), "Standard plurals can still be valid guesses");
+assert.ok(!answers.includes("areas"), "Standard plurals must not be possible answers");
 assert.deepEqual(answers, [...answers].sort(), "Answer list should be sorted");
-assert.deepEqual(guesses, [...guesses].sort(), "Guess list should be sorted");
+assert.deepEqual(validGuesses, [...validGuesses].sort(), "Guess list should be sorted");
 listeners.message({ data: { type: "initialize", answers, guesses } });
 assert.equal(messages.shift().type, "ready");
 

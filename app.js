@@ -180,12 +180,12 @@ function renderStatus(message) {
   }
 
   if (appState.answersLoaded && appState.guessesLoaded && appState.offlineReady) {
-    statusOutput.textContent = `Loaded ${appState.answerCount.toLocaleString()} possible answers and ${appState.guessCount.toLocaleString()} valid guesses from the expanded English lists. Not the official NYT answer pool. Offline support is installed.`;
+    statusOutput.textContent = `Loaded ${appState.answerCount.toLocaleString()} possible answers and ${appState.guessCount.toLocaleString()} valid guesses from the repository word lists. Not the official NYT word lists. Offline support is installed.`;
     return;
   }
 
   if (appState.answersLoaded && appState.guessesLoaded) {
-    statusOutput.textContent = `Loaded ${appState.answerCount.toLocaleString()} possible answers and ${appState.guessCount.toLocaleString()} valid guesses from the expanded English lists. Not the official NYT answer pool.`;
+    statusOutput.textContent = `Loaded ${appState.answerCount.toLocaleString()} possible answers and ${appState.guessCount.toLocaleString()} valid guesses from the repository word lists. Not the official NYT word lists.`;
     return;
   }
 
